@@ -604,4 +604,102 @@ describe('Memory', () => {
             expect(() => memory.validateSegmentName('valid')).to.not.throw();
         });
     });
+    describe('getStats()', () => {
+
+        it('returns initial statistics with empty cache', async () => {
+
+            const memory = new Memory();
+            await memory.start();
+            const stats = memory.getStats();
+            expect(stats).to.be.an.object();
+            await memory.stop();
+        });
+        it('returns initial statistics with empty cache', async () => {
+
+            const memory = new Memory();
+            await memory.start();
+            await memory.stop();
+        });
+
+
+        it('handles statistics with buffer items', async () => {
+
+            const buffer = Buffer.from('buffer value');
+            const memory = new Memory();
+            await memory.start();
+
+            const key = { segment: 'test', id: 'bufferItem' };
+
+            // Set buffer item
+            await memory.set(key, buffer, 500);
+
+            // Retrieve item to update statistics
+            await memory.get(key);
+
+            // Fetch stats
+            const stats = memory.getStats();
+            expect(stats.cacheHits).to.equal(1); // Should be a hit
+            expect(stats.cacheMisses).to.equal(0); // No misses
+            expect(stats.currentByteSize).to.be.greaterThan(0);
+            expect(stats.currentItemCount).to.equal(1);
+
+            await memory.stop();
+        });
+
+
+        it('updates statistics after cache expiration', async () => {
+
+            const memory = new Memory({ cleanupIntervalMsec: 50 });
+            await memory.start();
+            const key = { segment: 'test', id: 'item2' };
+            await memory.set(key, 'value2', 100);
+            await Hoek.wait(150);
+            await memory.stop();
+        });
+
+        it('handles statistics with buffer items', async () => {
+
+            const buffer = Buffer.from('buffer value');
+            const memory = new Memory();
+            await memory.start();
+            const key = { segment: 'test', id: 'bufferItem' };
+            await memory.set(key, buffer, 500);
+
+            await memory.get(key);
+
+
+            await memory.stop();
+        });
+
+    it('handles statistics with multiple items and cache eviction', async () => {
+
+            const memory = new Memory({ maxByteSize: 3000 }); // Small max size to trigger eviction
+            await memory.start();
+
+            const key1 = { segment: 'test', id: 'item1' };
+            const key2 = { segment: 'test', id: 'item2' };
+            const buffer1 = Buffer.from('item1 value');
+            const buffer2 = Buffer.from('item2 value');
+
+            await memory.set(key1, buffer1, 500);
+            await memory.set(key2, buffer2, 500);
+
+            // Retrieve items
+            await memory.get(key1);
+            await memory.get(key2);
+
+            // Fetch stats
+            const stats = memory.getStats();
+            expect(stats.cacheHits).to.be.at.least(2); // Should be hits for both items
+            expect(stats.cacheMisses).to.equal(0);
+            expect(stats.currentByteSize).to.be.greaterThan(0);
+            expect(stats.currentItemCount).to.be.at.least(2);
+
+            // Evict one item by exceeding the max size
+            await memory.set({ segment: 'test', id: 'largeItem' }, Buffer.alloc(200), 500);
+
+
+            await memory.stop();
+        });
+    });
 });
